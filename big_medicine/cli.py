@@ -22,8 +22,21 @@ class MedicineReservationCLI(MedicineReservation):
         return cls(medicine=medicine, count=int(count))
 
 
-# Custom parser
+# Custom arguments
 medicine_argument = Argument(parser=MedicineReservationCLI.parse)
+source_dataset = Argument(
+    exists=True,
+    file_okay=True,
+    dir_okay=False,
+    show_default=False,
+    help="Path to the source dataset",
+)
+target_dataset = Argument(
+    file_okay=True,
+    dir_okay=False,
+    show_default=False,
+    help="Path to the target dataset (source dataset is used by default)",
+)
 
 
 # https://github.com/fastapi/typer/issues/88#issuecomment-1732469681
@@ -113,21 +126,8 @@ async def query_by_id(
 
 @app.command()
 def prepare_dataset(
-    source: Annotated[
-        Path,
-        Argument(
-            exists=True,
-            file_okay=True,
-            dir_okay=False,
-        ),
-    ],
-    target: Annotated[
-        Path | None,
-        Argument(
-            file_okay=True,
-            dir_okay=False,
-        ),
-    ] = None,
+    source: Annotated[Path, source_dataset],
+    target: Annotated[Path | None, target_dataset] = None,
     min_value: Annotated[
         int,
         Option("--min", min=0),
