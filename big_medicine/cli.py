@@ -13,6 +13,7 @@ from big_medicine.core.client import (
     SpecificQuery,
 )
 from big_medicine.core.model import Account, ClientNetwork, MedicineReservation
+from big_medicine.utils.processing import prepare
 
 
 class MedicineReservationCLI(MedicineReservation):
@@ -142,8 +143,6 @@ def prepare_dataset(
         Logger.info(f"Reusing 'source' for 'target': {target}")
 
     import pandas as pd
-
-    from big_medicine.processing import prepare
 
     try:
         data = pd.read_csv(source)
