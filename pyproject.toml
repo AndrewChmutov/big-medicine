@@ -1,11 +1,30 @@
 [project]
 name = "big-medicine"
 version = "0.0.1"
+dependencies = [
+    "coloredlogs>=15.0.1",
+    "numpy>=2.2.3",
+    "pandas>=2.2.3",
+    "pydantic-typer>=0.0.13",
+    "toml>=0.10.2",
+    "typer>=0.15.2",
+]
 # dependencies = []
+requires-python = ">=3.11"
+
+[project.scripts]
+bigmed = "big_medicine.__main__:app"
+
 
 [build-system]
 requires = ["setuptools", "setuptools_scm"]
 build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = [
+    "big_medicine*",
+]
+
 
 [tool.ruff]
 preview = true
@@ -38,4 +57,6 @@ quote-style = "double"
 
 [tool.pydoclint]
 style = "google"
+allow-init-docstring = true
 arg-type-hints-in-signature = true
+arg-type-hints-in-docstring = false
