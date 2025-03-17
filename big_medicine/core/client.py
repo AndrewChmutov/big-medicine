@@ -1,5 +1,9 @@
 from collections.abc import Iterable
 from dataclasses import dataclass
+from types import TracebackType
+from typing import Self
+
+import aiohttp
 
 from big_medicine.core.model import Account, ClientNetwork, MedicineReservation
 from big_medicine.utils.logging import Logger
@@ -36,6 +40,20 @@ class Client:
         """
         self._network = network
         self._account = account
+        self._session: aiohttp.ClientSession | None = None
+
+    async def __aenter__(self) -> Self:
+        self._session = await aiohttp.ClientSession().__aenter__()
+        return self
+
+    async def __aexit__(
+        self,
+        exc_type: type[Exception] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> None:
+        assert self._session
+        await self._session.__aexit__(exc_type, exc_val, exc_tb)
 
     @Logger.func()
     def reserve(

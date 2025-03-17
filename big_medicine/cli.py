@@ -65,23 +65,23 @@ async def reserve(
     network: ClientNetwork,
 ) -> None:
     """Reserves medicines."""
-    client = Client(network, account)
-    client.reserve(medicines)
+    async with Client(network, account) as client:
+        client.reserve(medicines)
 
 
 @app.command()
-def update(
+async def update(
     id: Annotated[str, Argument(help="ID of the reservation")],
     medicines: Annotated[list[MedicineReservationCLI], medicine_argument],
     network: ClientNetwork,
 ) -> None:
     """Updates reservation."""
-    client = Client(network)
-    client.update(id, medicines)
+    async with Client(network) as client:
+        client.update(id, medicines)
 
 
 @app.command()
-def query(
+async def query(
     id: Annotated[str, Argument(help="ID of the reservation")],
     account: Account,
     network: ClientNetwork,
@@ -92,7 +92,7 @@ def query(
 
 
 @app.command()
-def query_all(
+async def query_all(
     network: ClientNetwork,
 ) -> None:
     """Retrieves all reservations in the system."""
@@ -101,7 +101,7 @@ def query_all(
 
 
 @app.command()
-def query_by_id(
+async def query_by_id(
     id: str,
     network: ClientNetwork,
     account: Account,

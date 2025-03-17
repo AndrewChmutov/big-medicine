@@ -2,6 +2,7 @@
 name = "big-medicine"
 version = "0.0.1"
 dependencies = [
+    "aiohttp>=3.11.14",
     "coloredlogs>=15.0.1",
     "numpy>=2.2.3",
     "pandas>=2.2.3",
