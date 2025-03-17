@@ -9,9 +9,9 @@ if TYPE_CHECKING:
 def prepare(
     data: pd.DataFrame,
     low: int,
-    high: int | None = None,
+    high: int,
 ) -> pd.DataFrame:
     import numpy as np
 
-    data["count"] = np.random.randint(low, high, size=data.shape[0])
+    data["count"] = np.random.randint(low=low, high=high, size=data.shape[0])
     return data

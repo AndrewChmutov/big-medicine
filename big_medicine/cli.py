@@ -132,7 +132,7 @@ def prepare_dataset(
         int,
         Option("--min", min=0),
     ] = 0,
-    max_value: Annotated[int | None, Option("--max", min=0)] = None,
+    max_value: Annotated[int, Option("--max", min=0)] = 1000,
 ) -> None:
     """Adds column representing the number of present medicines."""
     from big_medicine.utils.logging import Logger
