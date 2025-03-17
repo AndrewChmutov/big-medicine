@@ -1,4 +1,3 @@
-import asyncio
 import inspect
 from functools import partial, wraps
 from pathlib import Path
@@ -32,6 +31,7 @@ class AsyncTyper(PydanticTyper):
     @staticmethod
     def maybe_run_async(decorator: Callable, f: Callable) -> Callable:
         if inspect.iscoroutinefunction(f):
+            import asyncio
 
             @wraps(f)
             def runner(*args, **kwargs):  # noqa: ANN202
