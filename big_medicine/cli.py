@@ -82,12 +82,13 @@ def update(
 
 @app.command()
 def query(
+    id: Annotated[str, Argument(help="ID of the reservation")],
     account: Account,
     network: ClientNetwork,
 ) -> None:
     """Retrieves account reservations."""
-    client = Client(network)
-    client.query(AccountQuery())
+    client = Client(network, account)
+    client.query(AccountQuery(id=id))
 
 
 @app.command()
