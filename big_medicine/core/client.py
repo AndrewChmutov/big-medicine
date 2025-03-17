@@ -12,7 +12,6 @@ class Query:
 @dataclass
 class AccountQuery(Query):
     id: str
-    account: Account
 
 
 @dataclass
