@@ -1,0 +1,50 @@
+x-cassandra-base: &cassandra-base
+  image: cassandra:latest
+  environment: &cassandra-env
+    CASSANDRA_CLUSTER_NAME: cassandra-cluster
+    CASSANDRA_ENDPOINT_SNITCH: GossipingPropertyFileSnitch
+  networks:
+    - cassandra-net
+  healthcheck:
+    test: ["CMD-SHELL", "[ $$(nodetool statusgossip) = running ]"]
+    interval: 5s
+    timeout: 10s
+    retries: 60
+
+x-cassandra-other: &cassandra-other
+  <<: *cassandra-base
+  environment:
+    <<: *cassandra-env
+    CASSANDRA_SEEDS: cassandra1
+
+services:
+  cassandra1:
+    <<: *cassandra-base
+    ports:
+      - 9042:9042
+
+  cassandra2:
+    <<: *cassandra-other
+    depends_on:
+      cassandra1:
+        condition: service_healthy
+
+  cassandra3:
+    <<: *cassandra-other
+    depends_on:
+      cassandra2:
+        condition: service_healthy
+
+  test-server:
+    image: hello-world
+    depends_on:
+      cassandra1:
+        condition: service_healthy
+      cassandra2:
+        condition: service_healthy
+      cassandra3:
+        condition: service_healthy
+
+networks:
+  cassandra-net:
+    driver: bridge
