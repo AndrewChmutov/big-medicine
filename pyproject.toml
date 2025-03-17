@@ -11,7 +11,7 @@ dependencies = [
     "typer>=0.15.2",
 ]
 # dependencies = []
-requires-python = ">=3.11"
+requires-python = ">=3.11,<=3.12"
 
 [project.scripts]
 bigmed = "big_medicine.__main__:app"
