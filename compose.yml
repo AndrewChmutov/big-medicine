@@ -35,8 +35,8 @@ services:
       cassandra2:
         condition: service_healthy
 
-  test-server:
-    image: hello-world
+  init:
+    image: big-medicine-init
     depends_on:
       cassandra1:
         condition: service_healthy
