@@ -44,6 +44,8 @@ services:
         condition: service_healthy
       cassandra3:
         condition: service_healthy
+    networks:
+      - cassandra-net
 
 networks:
   cassandra-net:
