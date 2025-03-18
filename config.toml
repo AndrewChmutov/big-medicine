@@ -3,10 +3,15 @@ name = "Client"
 
 [clusters]
 points = [
-    "cassandra-1",
-    "cassandra-2",
-    "cassandra-3",
+    # "cassandra1",
+    # "cassandra2",
+    # "cassandra3",
+    "172.18.0.2",
+    "172.18.0.3",
+    "172.18.0.4",
 ]
+keyspace = "medicines"
+repl_factor = 1
 
 [network.client]
 ip = "127.0.0.1"

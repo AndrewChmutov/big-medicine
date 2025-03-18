@@ -18,6 +18,10 @@ class Account(BaseModel):
 
 class Cassandra(BaseModel):
     points: Annotated[list[str], Field(description="Names of clusters")]
+    keyspace: Annotated[str, Field(description="Cassandra keyspace")]
+    repl_factor: Annotated[
+        int, Field(description="Cassandra replication factor")
+    ]
 
 
 class NetworkBase(BaseModel):
