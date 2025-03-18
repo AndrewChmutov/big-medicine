@@ -12,7 +12,13 @@ from big_medicine.core.client import (
     EntireQuery,
     SpecificQuery,
 )
-from big_medicine.core.model import Account, ClientNetwork, MedicineReservation
+from big_medicine.core.model import (
+    Account,
+    Cassandra,
+    ClientNetwork,
+    MedicineReservation,
+)
+from big_medicine.utils.logging import Logger
 from big_medicine.utils.processing import prepare
 
 
@@ -136,8 +142,6 @@ def prepare_dataset(
     max_value: Annotated[int, Option("--max", min=0)] = 1000,
 ) -> None:
     """Adds column representing the number of present medicines."""
-    from big_medicine.utils.logging import Logger
-
     if not target:
         target = source
         Logger.info(f"Reusing 'source' for 'target': {target}")
@@ -152,3 +156,32 @@ def prepare_dataset(
 
     data = prepare(data, min_value, max_value)
     data.to_csv(target)
+
+
+@app.command()
+def dataset_to_cassandra(
+    prepared_dataset: Annotated[Path, source_dataset],
+    cassandra: Cassandra,
+) -> None:
+    import pandas as pd
+    from cassandra.cluster import Cluster
+    from cassandra.cqlengine.connection import (
+        register_connection,
+        set_default_connection,
+    )
+
+    from big_medicine.utils.db import upload
+
+    try:
+        Logger.info(f"Reading the dataset {prepared_dataset}")
+        data = pd.read_csv(prepared_dataset, low_memory=False)
+    except pd.errors.ParserError:
+        Logger.error("Could not parse a csv.")
+        return
+
+    Logger.info(f"Connecting to {cassandra.points}")
+    with Cluster(cassandra.points) as cluster, cluster.connect() as session:
+        _ = register_connection(str(session), session=session)
+        set_default_connection(str(session))
+
+        upload(data, cassandra.keyspace, cassandra.repl_factor)
