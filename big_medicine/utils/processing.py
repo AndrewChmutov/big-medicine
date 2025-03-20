@@ -25,7 +25,6 @@ def prepare(
         return x.startswith(source_label)
 
     def process(x: str) -> tuple[str, str]:
-        print(x, target_label + x.lstrip(source_label))
         return x, target_label + x.lstrip(source_label)
 
     columns = filter(is_side_effect, data.columns)
@@ -33,7 +32,6 @@ def prepare(
 
     columns = filter(lambda x: not is_side_effect(x), data.columns)
     mapping |= {key: key.lower().replace(" ", "_") for key in columns}
-    print(mapping)
 
     data = data.rename(mapping, axis="columns")
 
