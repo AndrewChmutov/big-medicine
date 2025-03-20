@@ -3,7 +3,7 @@ from cassandra.cqlengine.models import Model
 
 
 class Medicine(Model):
-    id = columns.UUID(primary_key=True)
+    id = columns.Integer(primary_key=True)
     name = columns.Text()
     substitute0 = columns.Text()
     substitute1 = columns.Text()
