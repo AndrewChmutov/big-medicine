@@ -140,6 +140,7 @@ def prepare_dataset(
         Option("--min", min=0),
     ] = 0,
     max_value: Annotated[int, Option("--max", min=0)] = 1000,
+    take: Annotated[int, Option(min=0)] = 1000,
 ) -> None:
     """Adds column representing the number of present medicines."""
     if not target:
@@ -154,7 +155,7 @@ def prepare_dataset(
         Logger.error("Could not parse a csv.")
         return
 
-    data = prepare(data, min_value, max_value)
+    data = prepare(data, min_value, max_value, take)
     data.to_csv(target)
 
 

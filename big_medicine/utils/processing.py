@@ -10,8 +10,12 @@ def prepare(
     data: pd.DataFrame,
     low: int,
     high: int,
+    take: int,
 ) -> pd.DataFrame:
     import numpy as np
+
+    # Shorten
+    data = data.iloc[:take]
 
     # Rename columns
     source_label = "sideEffect"
