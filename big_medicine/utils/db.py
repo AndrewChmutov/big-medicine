@@ -27,7 +27,7 @@ def upload(
     )
     from cassandra.query import UNSET_VALUE
 
-    from big_medicine.core.server import (
+    from big_medicine.core.server.model import (
         Medicine,
         Reservation,
         ReservationEntry,
@@ -95,6 +95,7 @@ def upload(
             future = session.execute_async(query)
             future.add_callbacks(insert_next, insert_next)
 
+    Logger.info("Uploading dataset")
     for _ in range(min(20, num_queries)):
         insert_next()
 

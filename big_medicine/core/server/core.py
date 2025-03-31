@@ -4,46 +4,32 @@ import os
 import traceback
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from enum import Enum
 from pathlib import Path
 
 from cassandra.cluster import Session
-from cassandra.cqlengine import columns
 from cassandra.cqlengine.connection import (
     Cluster,
     register_connection,
     set_default_connection,
 )
-from cassandra.cqlengine.models import Model
 from fastapi import FastAPI, Request
-from pydantic import BaseModel
 
-from big_medicine.core.model import Cassandra
+from big_medicine.core.client.model import Cassandra
+from big_medicine.core.server.message import (
+    MedicineReservations,
+    MedicineResponse,
+    ReservationResponse,
+    ReservationsResponse,
+    ResponseItem,
+    ResponseType,
+    UpdateReservation,
+)
+from big_medicine.core.server.model import (
+    Medicine,
+    Reservation,
+    ReservationEntry,
+)
 from big_medicine.utils.logging import Logger
-
-
-class Medicine(Model):
-    name = columns.Text(primary_key=True)
-    substitutes = columns.List(columns.Text())
-    side_effects = columns.List(columns.Text())
-    uses = columns.List(columns.Text())
-    chemical_class = columns.Text()
-    habit_forming = columns.Text()
-    therapeutic_class = columns.Text()
-    action_class = columns.Text()
-    count = columns.Integer()
-
-
-class ReservationEntry(Model):
-    medicine = columns.Text(primary_key=True)
-    reservation_id = columns.Integer(primary_key=True)
-    count = columns.Text()
-
-
-class Reservation(Model):
-    id = columns.Integer(primary_key=True)
-    account_name = columns.Text()
-
 
 CONFIG_PATH_ENV = "BIGMED_SERVER_CONFIG"
 
@@ -91,48 +77,6 @@ class Server(FastAPI):
 
 
 app = Server()
-
-
-class MedicineEntry(BaseModel):
-    name: str
-    count: int
-
-
-class MedicineReservations(BaseModel):
-    entries: list[MedicineEntry]
-
-
-class UpdateReservation(BaseModel):
-    id: str
-    entries: list[MedicineEntry]
-
-
-class ResponseType(str, Enum):
-    INFO = "info"
-    ERROR = "error"
-
-
-class ResponseItem(BaseModel):
-    type: ResponseType
-    msg: str = "-"
-
-
-class ReservationEntryItem(BaseModel):
-    reservation_id: int
-    medicine: str
-    count: str
-
-
-class ReservationResponse(ResponseItem):
-    reservation: ReservationEntryItem | None
-
-
-class ReservationsResponse(ResponseItem):
-    reservations: list[ReservationEntryItem]
-
-
-class MedicineResponse(ResponseItem):
-    medicine: dict | None
 
 
 @app.post("/reserve")

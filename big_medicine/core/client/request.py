@@ -2,16 +2,19 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from collections.abc import Iterable
-from types import TracebackType
-from typing import TYPE_CHECKING, Any, Self
+from typing import TYPE_CHECKING, Any
 
-from big_medicine.core.model import Account, ClientNetwork, MedicineReservation
+from big_medicine.core.client.model import MedicineReservation
 from big_medicine.utils.logging import Logger
 
 if TYPE_CHECKING:
     from aiohttp import ClientResponse, ClientSession
 
-    from big_medicine.core.server import MedicineEntry
+from big_medicine.core.server.message import (
+    MedicineEntry,
+    MedicineReservations,
+    UpdateReservation,
+)
 
 
 class Request(ABC):
@@ -59,17 +62,11 @@ class Reserve(PostRequest):
         self.entries = entries
 
     def model_entries(self) -> list[MedicineEntry]:
-        from big_medicine.core.server import MedicineEntry
-
         return [
             MedicineEntry(name=e.medicine, count=e.count) for e in self.entries
         ]
 
     def json(self) -> dict[str, Any]:
-        from big_medicine.core.server import (
-            MedicineReservations,
-        )
-
         return MedicineReservations(entries=self.model_entries()).model_dump()
 
     @staticmethod
@@ -87,8 +84,6 @@ class Update(Reserve):
         self.id = id
 
     def json(self) -> dict[str, Any]:
-        from big_medicine.core.server import UpdateReservation
-
         return UpdateReservation(
             id=self.id, entries=self.model_entries()
         ).model_dump()
@@ -136,47 +131,3 @@ class MedicineQuery(Query):
     @staticmethod
     def route() -> str:
         return "/medicine"
-
-
-class Client:
-    def __init__(
-        self, network: ClientNetwork, account: Account | None = None
-    ) -> None:
-        """Instantiates Client.
-
-        Args:
-            network: Network configuration.
-            account: Account configuration.
-        """
-        self._network = network
-        self._account = account
-        self._session: ClientSession | None = None
-
-    async def __aenter__(self) -> Self:
-        from aiohttp import ClientSession
-
-        self._session = await ClientSession().__aenter__()
-        return self
-
-    async def __aexit__(
-        self,
-        exc_type: type[Exception] | None,
-        exc_val: BaseException | None,
-        exc_tb: TracebackType | None,
-    ) -> None:
-        assert self._session
-        await self._session.__aexit__(exc_type, exc_val, exc_tb)
-
-    async def execute(self, request: Request) -> None:
-        assert self._session
-        await request.execute(self._session, self.base_url)
-
-    @property
-    def base_url(self) -> str:
-        assert self._network
-        return f"http://{self._network.ip}:{self._network.port}"
-
-    def __repr__(self) -> str:
-        network = self._network
-        account = self._account
-        return f"Client({network=}, {account=})"

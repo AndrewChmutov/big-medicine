@@ -9,20 +9,19 @@ from typing import Annotated, Callable, Self
 from pydantic_typer import Typer as PydanticTyper
 from typer import Argument, Option
 
-from big_medicine.core.client import (
-    AccountQuery,
-    AllQuery,
-    Client,
-    ReservationQuery,
-    Reserve,
-    Update,
-)
-from big_medicine.core.model import (
+from big_medicine.core.client.model import (
     Account,
     Cassandra,
     ClientNetwork,
     MedicineReservation,
     ServerNetwork,
+)
+from big_medicine.core.client.request import (
+    AccountQuery,
+    AllQuery,
+    ReservationQuery,
+    Reserve,
+    Update,
 )
 from big_medicine.utils.logging import Logger
 from big_medicine.utils.processing import prepare
@@ -91,6 +90,8 @@ async def reserve(
     network: ClientNetwork,
 ) -> None:
     """Reserves medicines."""
+    from big_medicine.core.client.core import Client
+
     async with Client(network, account) as client:
         await client.execute(Reserve(medicines))
 
@@ -102,6 +103,8 @@ async def update(
     network: ClientNetwork,
 ) -> None:
     """Updates reservation."""
+    from big_medicine.core.client.core import Client
+
     async with Client(network) as client:
         await client.execute(Update(id, medicines))
 
@@ -112,6 +115,8 @@ async def query_account(
     network: ClientNetwork,
 ) -> None:
     """Retrieves a specific reservation."""
+    from big_medicine.core.client.core import Client
+
     async with Client(network) as client:
         await client.execute(AccountQuery(account.name))
 
@@ -121,6 +126,8 @@ async def query_all(
     network: ClientNetwork,
 ) -> None:
     """Retrieves all reservations in the system."""
+    from big_medicine.core.client.core import Client
+
     async with Client(network) as client:
         await client.execute(AllQuery())
 
@@ -131,6 +138,8 @@ async def query_by_id(
     network: ClientNetwork,
 ) -> None:
     """Retrieves a single reservation by ID."""
+    from big_medicine.core.client.core import Client
+
     async with Client(network) as client:
         await client.execute(ReservationQuery(id))
 
@@ -172,7 +181,7 @@ def serve(
     import toml
     import uvicorn
 
-    from big_medicine.core.server import CONFIG_PATH_ENV
+    from big_medicine.core.server.core import CONFIG_PATH_ENV
 
     with tempfile.NamedTemporaryFile() as tfile:
         with open(tfile.name, "w") as file:
@@ -182,7 +191,7 @@ def serve(
 
         Logger.info("Starting an app...")
         uvicorn.run(
-            "big_medicine.core.server:app",
+            "big_medicine.core.server.core:app",
             host=network.ip,
             port=network.port,
             log_level=logging.INFO,
