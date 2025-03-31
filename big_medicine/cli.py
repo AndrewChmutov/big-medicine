@@ -1,4 +1,7 @@
 import inspect
+import logging
+import os
+import tempfile
 from functools import partial, wraps
 from pathlib import Path
 from typing import Annotated, Callable, Self
@@ -17,6 +20,7 @@ from big_medicine.core.model import (
     Cassandra,
     ClientNetwork,
     MedicineReservation,
+    ServerNetwork,
 )
 from big_medicine.utils.logging import Logger
 from big_medicine.utils.processing import prepare
@@ -157,6 +161,33 @@ def prepare_dataset(
 
     data = prepare(data, min_value, max_value, take)
     data.to_csv(target)
+
+
+@app.command()
+def serve(
+    cassandra: Cassandra,
+    network: ServerNetwork,
+) -> None:
+    """Creates a FastAPI server for request handling."""
+    import toml
+    import uvicorn
+
+    from big_medicine.core.server import CONFIG_PATH_ENV
+
+    with tempfile.NamedTemporaryFile() as tfile:
+        with open(tfile.name, "w") as file:
+            toml.dump(cassandra.model_dump(), file)
+
+        os.environ[CONFIG_PATH_ENV] = file.name
+
+        Logger.info("Starting an app...")
+        uvicorn.run(
+            "big_medicine.core.server:app",
+            host=network.ip,
+            port=network.port,
+            log_level=logging.INFO,
+            reload=True,
+        )
 
 
 @app.command()

@@ -1,3 +1,4 @@
 from big_medicine.cli import app
 
-app()
+if __name__ == "__main__":
+    app()

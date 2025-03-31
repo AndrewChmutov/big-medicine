@@ -5,11 +5,13 @@ dependencies = [
     "aiohttp>=3.11.14",
     "cassandra-driver>=3.29.2",
     "coloredlogs>=15.0.1",
+    "fastapi>=0.115.12",
     "numpy>=2.2.3",
     "pandas>=2.2.3",
     "pydantic-typer>=0.0.13",
     "toml>=0.10.2",
     "typer>=0.15.2",
+    "uvicorn>=0.34.0",
 ]
 # dependencies = []
 requires-python = ">=3.11,<=3.12"
