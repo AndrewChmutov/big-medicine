@@ -57,6 +57,11 @@ def upload(
             ", ".join("?" for _ in columns),
         )
     )
+    list_types = (
+        ("substitute", "substitutes"),
+        ("side_effect", "side_effects"),
+        ("use", "uses"),
+    )
 
     def insert_next(previous_result: Any = guard) -> None:
         if previous_result != guard:
@@ -65,18 +70,29 @@ def upload(
                 Logger.error(msg)
             if next(num_finished) >= num_queries - 1:
                 event.set()
-            event.set()
 
         if next(num_started) < num_queries:
             _, series = next(data_it)
-            series = series.fillna(UNSET_VALUE)
             assert isinstance(series, pd.Series)
 
-            query = prepared_query.bind(list(series.values))
+            data = series.fillna(UNSET_VALUE).to_dict()
+            for prefix, agg in list_types:
+                # series columns
+                s_columns = [col for col in data if col.startswith(prefix)]
+                values = [
+                    data[col]
+                    for col in s_columns
+                    if data[col] is not UNSET_VALUE
+                ]
+                for col in s_columns:
+                    del data[col]
+                data[agg] = values
+
+            query = prepared_query.bind([data[key] for key in columns])
             future = session.execute_async(query)
             future.add_callbacks(insert_next, insert_next)
 
-    for _ in range(min(120, num_queries)):
+    for _ in range(min(20, num_queries)):
         insert_next()
 
     event.wait()
