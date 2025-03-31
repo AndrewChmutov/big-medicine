@@ -62,3 +62,10 @@ class Medicine(Model):
     therapeutic_class = columns.Text()
     action_class = columns.Text()
     count = columns.Integer()
+
+
+class Reservation(Model):
+    id = columns.Integer(primary_key=True)
+    account_name = columns.Text()
+    medicine = columns.Text()
+    count = columns.Text()

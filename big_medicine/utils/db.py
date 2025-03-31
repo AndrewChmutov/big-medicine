@@ -24,7 +24,7 @@ def upload(
     )
     from cassandra.cqlengine.query import BatchQuery
 
-    from big_medicine.core.server import Medicine
+    from big_medicine.core.server import Medicine, Reservation
 
     _ = Logger.info
     _(f"Creating keyspace {keyspace_name} with {replication_factor=}")
@@ -32,7 +32,9 @@ def upload(
 
     Logger.info(f"Synchronizing table schema {Medicine.__name__}")
     Medicine.__keyspace__ = keyspace_name  # pyright: ignore[reportAttributeAccessIssue]
-    sync_table(Medicine, keyspaces=[keyspace_name])
+    Reservation.__keyspace__ = keyspace_name  # pyright: ignore[reportAttributeAccessIssue]
+    sync_table(Medicine)
+    sync_table(Reservation)
 
     batch_size = 4
     n_batches = data.shape[0] / batch_size
