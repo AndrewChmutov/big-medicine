@@ -33,6 +33,12 @@ class _Logger(logging.Logger):
         super().__init__(name=__package__)
         coloredlogs.install(logger=self, level=level, fmt=self.FMT)
 
+        uvicorn_loggers = ["uvicorn", "uvicorn.error", "uvicorn.access"]
+        for logger_name in uvicorn_loggers:
+            logger = logging.getLogger(logger_name)
+            logger.handlers = self.handlers
+            logger.propagate = False
+
     @staticmethod
     def func(
         level: Level = Level.DEBUG,

@@ -186,6 +186,7 @@ def serve(
             host=network.ip,
             port=network.port,
             log_level=logging.INFO,
+            log_config=None,
             reload=True,
         )
 
