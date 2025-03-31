@@ -93,9 +93,18 @@ class Server(FastAPI):
 app = Server()
 
 
-class MedicineReservation(BaseModel):
+class MedicineEntry(BaseModel):
     name: str
     count: int
+
+
+class MedicineReservations(BaseModel):
+    entries: list[MedicineEntry]
+
+
+class UpdateReservation(BaseModel):
+    id: str
+    entries: list[MedicineEntry]
 
 
 class ResponseType(str, Enum):
@@ -127,14 +136,14 @@ class MedicineResponse(ResponseItem):
 
 
 @app.post("/reserve")
-def reserve(request: Request, item: MedicineReservation) -> ResponseItem:
+def reserve(request: Request, item: MedicineReservations) -> ResponseItem:
     return ResponseItem(msg="Reserved successfully.", type=ResponseType.INFO)
 
 
-@app.get("/update")
-def update(request: Request, name: str) -> ResponseItem:
+@app.post("/update")
+def update(request: Request, item: UpdateReservation) -> ResponseItem:
     return ResponseItem(
-        msg=f"Updated reservation '{name}' successfully.",
+        msg="Updated reservation successfully.",
         type=ResponseType.INFO,
     )
 

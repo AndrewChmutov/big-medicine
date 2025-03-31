@@ -11,9 +11,11 @@ from typer import Argument, Option
 
 from big_medicine.core.client import (
     AccountQuery,
+    AllQuery,
     Client,
-    EntireQuery,
-    SpecificQuery,
+    ReservationQuery,
+    Reserve,
+    Update,
 )
 from big_medicine.core.model import (
     Account,
@@ -90,7 +92,7 @@ async def reserve(
 ) -> None:
     """Reserves medicines."""
     async with Client(network, account) as client:
-        client.reserve(medicines)
+        await client.execute(Reserve(medicines))
 
 
 @app.command()
@@ -101,18 +103,17 @@ async def update(
 ) -> None:
     """Updates reservation."""
     async with Client(network) as client:
-        client.update(id, medicines)
+        await client.execute(Update(id, medicines))
 
 
 @app.command()
-async def query(
-    id: Annotated[str, Argument(help="ID of the reservation")],
+async def query_account(
     account: Account,
     network: ClientNetwork,
 ) -> None:
-    """Retrieves account reservations."""
-    client = Client(network, account)
-    client.query(AccountQuery(id=id))
+    """Retrieves a specific reservation."""
+    async with Client(network) as client:
+        await client.execute(AccountQuery(account.name))
 
 
 @app.command()
@@ -120,19 +121,18 @@ async def query_all(
     network: ClientNetwork,
 ) -> None:
     """Retrieves all reservations in the system."""
-    client = Client(network)
-    client.query(EntireQuery())
+    async with Client(network) as client:
+        await client.execute(AllQuery())
 
 
 @app.command()
 async def query_by_id(
     id: str,
     network: ClientNetwork,
-    account: Account,
 ) -> None:
     """Retrieves a single reservation by ID."""
-    client = Client(network, account)
-    client.query(SpecificQuery(id=id))
+    async with Client(network) as client:
+        await client.execute(ReservationQuery(id))
 
 
 @app.command()
