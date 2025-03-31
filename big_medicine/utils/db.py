@@ -27,17 +27,20 @@ def upload(
     )
     from cassandra.query import UNSET_VALUE
 
-    from big_medicine.core.server import Medicine, Reservation
+    from big_medicine.core.server import (
+        Medicine,
+        Reservation,
+        ReservationEntry,
+    )
 
     _ = Logger.info
     _(f"Creating keyspace {keyspace_name} with {replication_factor=}")
     create_keyspace_simple(keyspace_name, replication_factor)
 
     Logger.info("Synchronizing table schemas")
-    Medicine.__keyspace__ = keyspace_name  # pyright: ignore[reportAttributeAccessIssue]
-    Reservation.__keyspace__ = keyspace_name  # pyright: ignore[reportAttributeAccessIssue]
-    sync_table(Medicine)
-    sync_table(Reservation)
+    sync_table(Medicine, keyspaces=[keyspace_name])
+    sync_table(ReservationEntry, keyspaces=[keyspace_name])
+    sync_table(Reservation, keyspaces=[keyspace_name])
 
     guard = object()
     num_queries = data.shape[0]

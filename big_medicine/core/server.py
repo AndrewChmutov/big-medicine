@@ -32,11 +32,15 @@ class Medicine(Model):
     count = columns.Integer()
 
 
+class ReservationEntry(Model):
+    medicine = columns.Text(primary_key=True)
+    reservation_id = columns.Integer(primary_key=True)
+    count = columns.Text()
+
+
 class Reservation(Model):
     id = columns.Integer(primary_key=True)
     account_name = columns.Text()
-    medicine = columns.Text()
-    count = columns.Text()
 
 
 CONFIG_PATH_ENV = "BIGMED_SERVER_CONFIG"
@@ -67,6 +71,7 @@ async def lifespan(self: Server) -> AsyncGenerator[None, None]:
 
     Logger.info("Configuring keyspace names")
     Medicine.__keyspace__ = config.keyspace  # pyright: ignore[reportAttributeAccessIssue]
+    ReservationEntry.__keyspace__ = config.keyspace  # pyright: ignore[reportAttributeAccessIssue]
     Reservation.__keyspace__ = config.keyspace  # pyright: ignore[reportAttributeAccessIssue]
 
     with Cluster(config.points) as cluster, cluster.connect() as session:
