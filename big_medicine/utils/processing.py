@@ -38,4 +38,4 @@ def prepare(
     # Add column
     data["count"] = np.random.randint(low=low, high=high, size=data.shape[0])
 
-    return data
+    return data.set_index("id")

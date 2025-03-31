@@ -160,7 +160,7 @@ def prepare_dataset(
         return
 
     data = prepare(data, min_value, max_value, take)
-    data.to_csv(target)
+    data.to_csv(target, index=True)
 
 
 @app.command()
@@ -206,7 +206,7 @@ def dataset_to_cassandra(
 
     try:
         Logger.info(f"Reading the dataset {prepared_dataset}")
-        data = pd.read_csv(prepared_dataset, low_memory=False)
+        data = pd.read_csv(prepared_dataset, low_memory=False, index_col="id")
     except pd.errors.ParserError:
         Logger.error("Could not parse a csv.")
         return

@@ -21,8 +21,7 @@ from big_medicine.utils.logging import Logger
 
 
 class Medicine(Model):
-    id = columns.Integer(primary_key=True)
-    name = columns.Text()
+    name = columns.Text(primary_key=True)
     substitute0 = columns.Text()
     substitute1 = columns.Text()
     substitute2 = columns.Text()
