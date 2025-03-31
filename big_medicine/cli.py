@@ -9,20 +9,19 @@ from typing import Annotated, Callable, Self
 from pydantic_typer import Typer as PydanticTyper
 from typer import Argument, Option
 
-from big_medicine.core.client import (
-    AccountQuery,
-    AllQuery,
-    Client,
-    ReservationQuery,
-    Reserve,
-    Update,
-)
-from big_medicine.core.model import (
+from big_medicine.core.client.model import (
     Account,
     Cassandra,
     ClientNetwork,
     MedicineReservation,
     ServerNetwork,
+)
+from big_medicine.core.client.request import (
+    AccountQuery,
+    AllQuery,
+    ReservationQuery,
+    Reserve,
+    Update,
 )
 from big_medicine.utils.logging import Logger
 from big_medicine.utils.processing import prepare
@@ -172,7 +171,7 @@ def serve(
     import toml
     import uvicorn
 
-    from big_medicine.core.server import CONFIG_PATH_ENV
+    from big_medicine.core.server.core import CONFIG_PATH_ENV
 
     with tempfile.NamedTemporaryFile() as tfile:
         with open(tfile.name, "w") as file:
@@ -182,7 +181,7 @@ def serve(
 
         Logger.info("Starting an app...")
         uvicorn.run(
-            "big_medicine.core.server:app",
+            "big_medicine.core.server.core:app",
             host=network.ip,
             port=network.port,
             log_level=logging.INFO,

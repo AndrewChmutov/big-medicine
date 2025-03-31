@@ -27,7 +27,7 @@ def upload(
     )
     from cassandra.query import UNSET_VALUE
 
-    from big_medicine.core.server import (
+    from big_medicine.core.server.model import (
         Medicine,
         Reservation,
         ReservationEntry,
