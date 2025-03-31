@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import os
+import traceback
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from enum import Enum
 from pathlib import Path
 
 from cassandra.cluster import Session
@@ -13,8 +15,8 @@ from cassandra.cqlengine.connection import (
     set_default_connection,
 )
 from cassandra.cqlengine.models import Model
-from fastapi import FastAPI
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI, Request
+from pydantic import BaseModel
 
 from big_medicine.core.model import Cassandra
 from big_medicine.utils.logging import Logger
@@ -91,16 +93,102 @@ class Server(FastAPI):
 app = Server()
 
 
+class MedicineReservation(BaseModel):
+    name: str
+    count: int
+
+
+class ResponseType(str, Enum):
+    INFO = "info"
+    ERROR = "error"
+
+
+class ResponseItem(BaseModel):
+    type: ResponseType
+    msg: str = "-"
+
+
+class ReservationEntryItem(BaseModel):
+    reservation_id: int
+    medicine: str
+    count: str
+
+
+class ReservationResponse(ResponseItem):
+    reservation: ReservationEntryItem | None
+
+
+class ReservationsResponse(ResponseItem):
+    reservations: list[ReservationEntryItem]
+
+
+class MedicineResponse(ResponseItem):
+    medicine: dict | None
+
+
+@app.post("/reserve")
+def reserve(request: Request, item: MedicineReservation) -> ResponseItem:
+    return ResponseItem(msg="Reserved successfully.", type=ResponseType.INFO)
+
+
+@app.get("/update")
+def update(request: Request, name: str) -> ResponseItem:
+    return ResponseItem(
+        msg=f"Updated reservation '{name}' successfully.",
+        type=ResponseType.INFO,
+    )
+
+
 @app.get("/query")
-def query() -> JSONResponse:
-    for med in Medicine.objects().all():
-        print(med.name)
-    return JSONResponse({"kek": "hello"})
+def query(request: Request, id: int) -> ReservationResponse:
+    return ReservationResponse(
+        type=ResponseType.INFO,
+        reservation=None,
+    )
+
+
+@app.get("/query-account")
+def query_account(request: Request, name: str) -> ReservationsResponse:
+    return ReservationsResponse(
+        type=ResponseType.INFO,
+        reservations=[],
+    )
+
+
+@app.get("/query-all")
+def query_all() -> ReservationsResponse:
+    return ReservationsResponse(
+        type=ResponseType.INFO,
+        reservations=[],
+    )
+
+
+@app.get("/medicine")
+def medicine(request: Request, name: str) -> MedicineResponse:
+    try:
+        obj = Medicine.objects.allow_filtering().filter(name=name).get()
+        return MedicineResponse(medicine=dict(obj), type=ResponseType.INFO)
+    except Exception as ex:
+        log_exception(ex)
+        return MedicineResponse(medicine=None, type=ResponseType.INFO)
 
 
 @app.get("/delete")
-def delete() -> JSONResponse:
+def delete() -> ResponseItem:
     assert app.session
-    app.session.execute(f"DROP KEYSPACE {Medicine.__keyspace__};")
-    # app.session.execute(f"TRUNCATE {Medicine.__keyspace__}.Medicine;")
-    return JSONResponse({"kek": "hello"})
+    keyspace = Medicine.__keyspace__
+    Logger.info(f"Removing keyspace {keyspace}")
+    try:
+        app.session.execute(f"DROP KEYSPACE {keyspace};")
+        return ResponseItem(
+            msg=f"Deleted the keyspace {keyspace}", type=ResponseType.INFO
+        )
+    except Exception as ex:
+        log_exception(ex)
+        return ResponseItem(msg="Database is empty", type=ResponseType.INFO)
+
+
+def log_exception(ex: Exception) -> None:
+    trace = "\n".join(traceback.format_tb(ex.__traceback__))
+    error_msg = f"Exception: {ex}\nStack trace:\n{trace}"
+    Logger.error(error_msg)
