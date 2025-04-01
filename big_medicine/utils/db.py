@@ -30,7 +30,6 @@ def upload(
     from big_medicine.core.server.model import (
         Medicine,
         Reservation,
-        ReservationEntry,
     )
 
     _ = Logger.info
@@ -39,7 +38,6 @@ def upload(
 
     Logger.info("Synchronizing table schemas")
     sync_table(Medicine, keyspaces=[keyspace_name])
-    sync_table(ReservationEntry, keyspaces=[keyspace_name])
     sync_table(Reservation, keyspaces=[keyspace_name])
 
     guard = object()

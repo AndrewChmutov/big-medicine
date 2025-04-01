@@ -14,12 +14,9 @@ class Medicine(Model):
     count = columns.Integer()
 
 
-class ReservationEntry(Model):
-    medicine = columns.Text(primary_key=True)
-    reservation_id = columns.Integer(primary_key=True)
-    count = columns.Text()
-
-
 class Reservation(Model):
-    id = columns.Integer(primary_key=True)
-    account_name = columns.Text()
+    id = columns.UUID(primary_key=True)
+    reservation_id = columns.UUID(primary_key=True)
+    account_name = columns.Text(primary_key=True)
+    medicine = columns.Text()
+    count = columns.Integer()

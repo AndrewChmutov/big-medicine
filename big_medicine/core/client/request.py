@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 from abc import ABC, abstractmethod
 from collections.abc import Iterable
 from typing import TYPE_CHECKING, Any
@@ -34,13 +35,14 @@ class GetRequest(Request):
         async with session.get(
             self.url(base_url), params=self.params()
         ) as response:
-            self.handle_response(response)
+            await self.handle_response(response)
 
     def params(self) -> dict[str, Any]:
         return {}
 
-    def handle_response(self, response: ClientResponse) -> None:
-        Logger.info(f"{response}")
+    async def handle_response(self, response: ClientResponse) -> None:
+        content = await response.json()
+        Logger.info(f"{content}")
 
 
 class PostRequest(Request):
@@ -48,26 +50,34 @@ class PostRequest(Request):
         async with session.post(
             self.url(base_url), json=self.json()
         ) as response:
-            self.handle_response(response)
+            await self.handle_response(response)
 
     @abstractmethod
     def json(self) -> dict[str, Any]: ...
 
-    def handle_response(self, response: ClientResponse) -> None:
-        Logger.info(f"{response}")
+    async def handle_response(self, response: ClientResponse) -> None:
+        content = await response.json()
+        Logger.info(f"{content}")
 
 
 class Reserve(PostRequest):
-    def __init__(self, entries: Iterable[MedicineReservation]) -> None:
+    def __init__(
+        self, account_name: str, entries: Iterable[MedicineReservation]
+    ) -> None:
         self.entries = entries
+        self.account_name = account_name
 
     def model_entries(self) -> list[MedicineEntry]:
-        return [
-            MedicineEntry(name=e.medicine, count=e.count) for e in self.entries
-        ]
+        entries = list(self.entries)
+        if len(set(e.medicine for e in self.entries)) != len(entries):
+            Logger.error("Use of duplicated medicines.")
+            sys.exit(1)
+        return [MedicineEntry(name=e.medicine, count=e.count) for e in entries]
 
     def json(self) -> dict[str, Any]:
-        return MedicineReservations(entries=self.model_entries()).model_dump()
+        return MedicineReservations(
+            account_name=self.account_name, entries=self.model_entries()
+        ).model_dump()
 
     @staticmethod
     def route() -> str:
@@ -78,9 +88,10 @@ class Update(Reserve):
     def __init__(
         self,
         id: str,
+        account_name: str,
         entries: Iterable[MedicineReservation],
     ) -> None:
-        super().__init__(entries)
+        super().__init__(account_name, entries)
         self.id = id
 
     def json(self) -> dict[str, Any]:

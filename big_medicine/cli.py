@@ -93,20 +93,21 @@ async def reserve(
     from big_medicine.core.client.core import Client
 
     async with Client(network, account) as client:
-        await client.execute(Reserve(medicines))
+        await client.execute(Reserve(account.name, medicines))
 
 
 @app.command()
 async def update(
     id: Annotated[str, Argument(help="ID of the reservation")],
     medicines: Annotated[list[MedicineReservationCLI], medicine_argument],
+    account: Account,
     network: ClientNetwork,
 ) -> None:
     """Updates reservation."""
     from big_medicine.core.client.core import Client
 
     async with Client(network) as client:
-        await client.execute(Update(id, medicines))
+        await client.execute(Update(id, account.name, medicines))
 
 
 @app.command()

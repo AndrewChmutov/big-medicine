@@ -10,6 +10,7 @@ class MedicineEntry(BaseModel):
 
 class MedicineReservations(BaseModel):
     entries: list[MedicineEntry]
+    account_name: str
 
 
 class UpdateReservation(BaseModel):

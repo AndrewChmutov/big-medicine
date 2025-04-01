@@ -21,7 +21,7 @@ R = TypeVar("R")
 class _Logger(logging.Logger):
     FMT = "%(asctime)s %(filename)s:%(lineno)d %(levelname)s %(message)s"  # noqa: E501
 
-    def __init__(self, level: int | str = logging.INFO) -> None:
+    def __init__(self, level: int | str = logging.DEBUG) -> None:
         """Instantiates custom logger.
 
         Args:
