@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from types import TracebackType
-from typing import TYPE_CHECKING, Self
+from typing import TYPE_CHECKING
 
 from big_medicine.core.client.model import Account, ClientNetwork
 from big_medicine.core.client.request import Request
@@ -24,7 +24,7 @@ class Client:
         self._account = account
         self._session: ClientSession | None = None
 
-    async def __aenter__(self) -> Self:
+    async def __aenter__(self) -> "Client":
         from aiohttp import ClientSession
 
         self._session = await ClientSession().__aenter__()

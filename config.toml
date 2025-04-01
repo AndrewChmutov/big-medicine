@@ -1,7 +1,7 @@
 [account]
 name = "Client"
 
-[clusters]
+[cassandra]
 points = [
     # "cassandra1",
     # "cassandra2",

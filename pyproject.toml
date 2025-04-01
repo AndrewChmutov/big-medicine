@@ -14,7 +14,7 @@ dependencies = [
     "uvicorn>=0.34.0",
 ]
 # dependencies = []
-requires-python = ">=3.11,<=3.12"
+requires-python = ">=3.10,<=3.12"
 
 [project.scripts]
 bigmed = "big_medicine.__main__:app"

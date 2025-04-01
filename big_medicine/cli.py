@@ -4,7 +4,7 @@ import os
 import tempfile
 from functools import partial, wraps
 from pathlib import Path
-from typing import Annotated, Callable, Self
+from typing import Annotated, Callable
 
 from pydantic_typer import Typer as PydanticTyper
 from typer import Argument, Option
@@ -29,7 +29,7 @@ from big_medicine.utils.processing import prepare
 
 class MedicineReservationCLI(MedicineReservation):
     @classmethod
-    def parse(cls, value: str) -> Self:
+    def parse(cls, value: str) -> "MedicineReservationCLI":
         medicine, count = value.split(",")
         return cls(medicine=medicine, count=int(count))
 
