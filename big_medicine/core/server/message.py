@@ -30,7 +30,7 @@ class ResponseItem(BaseModel):
 
 
 class ReservationEntryItem(BaseModel):
-    reservation_id: str
+    id: str
     account_name: str
     entries: list[MedicineEntry]
 

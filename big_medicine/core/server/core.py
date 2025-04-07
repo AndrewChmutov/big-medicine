@@ -5,7 +5,7 @@ import operator
 import os
 import traceback
 import uuid
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Iterable, Iterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -110,6 +110,10 @@ async def lifespan(self: Server) -> AsyncGenerator[None, None]:
                     ", ".join("?" for _ in columns),
                 )
             ),
+            reservation_delete=_(
+                f"DELETE FROM {Reservation.__name__.lower()} WHERE "
+                "reservation_id = ?"
+            ),
         )
         self.statements = statements
         yield
@@ -124,6 +128,7 @@ class Statements:
     reservation_select_account: PreparedStatement
     reservation_select_all: PreparedStatement
     reservation_insert: PreparedStatement
+    reservation_delete: PreparedStatement
 
 
 class Server(FastAPI):
@@ -146,36 +151,37 @@ def session_and_statements() -> tuple[Session, Statements]:
     return session, statements
 
 
+def get_current_counts(
+    session: Session, statements: Statements, entries: Iterable[MedicineEntry]
+) -> Iterator[int | None]:
+    for medicine in entries:
+        current_count = session.execute(
+            statements.medicine_select_count.bind((medicine.name,))
+        ).one()
+
+        yield (current_count or {}).get("count")
+
+
+def medicine_does_not_exist_response(medicine: MedicineEntry) -> ResponseItem:
+    msg = f"Medicine {medicine.name} does not exist"
+    Logger.debug(msg)
+    return ResponseItem(
+        msg=msg,
+        type=ResponseType.ERROR,
+    )
+
+
 @app.post("/reserve")
 def reserve(request: Request, item: MedicineReservations) -> ResponseItem:
-    # For each product
-    # * verify whether count is ok
-    # * decrease the count under the condition the count hasn't changed
-    # * create new reservation
     session, statements = session_and_statements()
 
-    current_counts = []
-    for medicine in item.entries:
-        current_counts.append(
-            session.execute(
-                statements.medicine_select_count.bind((medicine.name,))
-            ).one()
-        )
-
-    # Subtract counts
-    # Note: Batch with conditions cannot span multiple tables
-    # therefore it is done in two stages
+    current_counts = list(
+        get_current_counts(session, statements, item.entries)
+    )
     medicine_and_counts = list(zip(item.entries, current_counts))
     for i, (medicine, current_count) in enumerate(medicine_and_counts):
-        # Verify count
-        current_count = (current_count or {}).get("count")
         if current_count is None:
-            msg = f"Medicine {medicine.name} does not exist"
-            Logger.debug(msg)
-            return ResponseItem(
-                msg=msg,
-                type=ResponseType.ERROR,
-            )
+            return medicine_does_not_exist_response(medicine)
 
         # Compare count
         if medicine.count > current_count:
@@ -214,28 +220,14 @@ def reserve(request: Request, item: MedicineReservations) -> ResponseItem:
             ))
         )
 
-    msg = f"Reserved successfully: {reservation_id}."
+    msg = f"Reserved successfully: {reservation_id}"
     Logger.debug(msg)
     return ResponseItem(msg=msg, type=ResponseType.INFO)
 
 
-@app.post("/update")
-def update(request: Request, item: UpdateReservation) -> ResponseItem:
-    # For each product
-    # * verify whether new count is ok
-    # * decrease the count under the condition the count hasn't changed
-    # * remove old reservation
-    # * create new reservation
-    return ResponseItem(
-        msg="Updated reservation successfully.",
-        type=ResponseType.INFO,
-    )
-
-
-@app.get("/query")
-def query(request: Request, id: str) -> ReservationResponse | ResponseItem:
-    session, statements = session_and_statements()
-
+def retrieve_single_reservation(
+    session: Session, statements: Statements, id: str
+) -> ReservationEntryItem | ResponseItem:
     try:
         id_uuid = uuid.UUID(str(id))
     except ValueError:
@@ -246,11 +238,9 @@ def query(request: Request, id: str) -> ReservationResponse | ResponseItem:
     if not all:
         return ResponseItem(type=ResponseType.ERROR, msg="No such reservation")
 
-    reservation_id = id
     account_name = all[0]["account_name"]
-    return ReservationResponse(
-        type=ResponseType.INFO,
-        reservation_id=reservation_id,
+    return ReservationEntryItem(
+        id=id,
         account_name=account_name,
         entries=[
             MedicineEntry(name=entry["name"], count=entry["count"])
@@ -259,28 +249,116 @@ def query(request: Request, id: str) -> ReservationResponse | ResponseItem:
     )
 
 
+@app.post("/update")
+def update(request: Request, item: UpdateReservation) -> ResponseItem:
+    session, statements = session_and_statements()
+
+    match retrieve_single_reservation(session, statements, item.id):
+        case ReservationEntryItem() as reservation:
+            pass
+        case ResponseItem() as response:
+            return response
+
+    current_counts = list(
+        get_current_counts(session, statements, item.entries)
+    )
+    current_reserved = {e.name: e.count for e in reservation.entries}
+    medicine_and_counts = list(zip(item.entries, current_counts))
+    for i, (medicine, current_count) in enumerate(medicine_and_counts):
+        if current_count is None:
+            return medicine_does_not_exist_response(medicine)
+
+        # Compare count
+        limit = current_count + current_reserved.get(medicine.name, 0)
+        if medicine.count > limit:
+            msg = (
+                f"Cannot reserve '{medicine.name}': requested "
+                f"{medicine.count} units while there are only "
+                f"{limit}"
+            )
+            Logger.debug(msg)
+            return ResponseItem(msg=msg, type=ResponseType.ERROR)
+
+        # Execute
+        try:
+            session.execute(
+                statements.medicine_conditional_update.bind((
+                    limit - medicine.count,
+                    medicine.name,
+                    current_count,
+                ))
+            )
+        except Exception as ex:
+            # Handle conflict: restore up to i-th medicine
+            log_exception(ex)
+            msg = "An exception occurred"
+            return ResponseItem(type=ResponseType.EXCEPTION, msg=msg)
+
+    # Potential rollback in case of an error
+    session.execute(
+        statements.reservation_delete.bind((uuid.UUID(reservation.id),))
+    )
+
+    reservation_id = uuid.UUID(reservation.id)
+    account_name = reservation.account_name
+    for medicine, current_count in zip(item.entries, current_counts):
+        session.execute(
+            statements.reservation_insert.bind((
+                reservation_id,
+                uuid.uuid4(),
+                account_name,
+                medicine.name,
+                medicine.count,
+            ))
+        )
+
+    msg = f"Update successfully: {reservation_id}"
+    Logger.debug(msg)
+    return ResponseItem(msg=msg, type=ResponseType.INFO)
+
+
+@app.get("/query")
+def query(request: Request, id: str) -> ReservationResponse | ResponseItem:
+    session, statements = session_and_statements()
+    match retrieve_single_reservation(session, statements, id):
+        case ReservationEntryItem() as item:
+            return ReservationResponse(
+                type=ResponseType.INFO,
+                id=item.id,
+                account_name=item.account_name,
+                entries=item.entries,
+            )
+        case ResponseItem() as response:
+            return response
+
+
 def retrieve_reservations(
     session: Session, statement: PreparedStatement | BoundStatement
-) -> ReservationsResponse | ResponseItem:
+) -> Iterator[ReservationEntryItem]:
     all = session.execute(statement).all()
-    if not all:
-        msg = "No reservations found"
-        return ResponseItem(type=ResponseType.ERROR, msg=msg)
 
-    reservations = []
     getter = operator.itemgetter("reservation_id")
     for reservation_id, entries in itertools.groupby(all, getter):
         entries = list(entries)
         account_name = entries[0]["account_name"]
-        reservation = ReservationEntryItem(
-            reservation_id=str(reservation_id),
+
+        yield ReservationEntryItem(
+            id=str(reservation_id),
             account_name=account_name,
             entries=[
                 MedicineEntry(name=entry["name"], count=entry["count"])
                 for entry in entries
             ],
         )
-        reservations.append(reservation)
+
+
+def retrieve_reservations_response(
+    session: Session, statement: PreparedStatement | BoundStatement
+) -> ReservationsResponse | ResponseItem:
+    reservations = list(retrieve_reservations(session, statement))
+    if not reservations:
+        msg = "No reservations found"
+        return ResponseItem(type=ResponseType.ERROR, msg=msg)
 
     return ReservationsResponse(
         type=ResponseType.INFO,
@@ -294,14 +372,14 @@ def query_account(
 ) -> ReservationsResponse | ResponseItem:
     session, statements = session_and_statements()
     statement = statements.reservation_select_account.bind((name,))
-    return retrieve_reservations(session, statement)
+    return retrieve_reservations_response(session, statement)
 
 
 @app.get("/query-all")
 def query_all() -> ReservationsResponse | ResponseItem:
     session, statements = session_and_statements()
     statement = statements.reservation_select_all
-    return retrieve_reservations(session, statement)
+    return retrieve_reservations_response(session, statement)
 
 
 @app.get("/medicine")
@@ -317,7 +395,6 @@ def delete() -> ResponseItem:
     assert app.session
     Logger.info("Cleaning the database")
     app.session.execute("DROP KEYSPACE medicines;")
-    app.session.execute("DROP KEYSPACE reservations;")
     return ResponseItem(msg="Cleaned the database", type=ResponseType.INFO)
 
 
