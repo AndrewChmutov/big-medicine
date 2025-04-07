@@ -19,6 +19,7 @@ from big_medicine.core.client.model import (
 from big_medicine.core.client.request import (
     AccountQuery,
     AllQuery,
+    Clean,
     ReservationQuery,
     Reserve,
     Update,
@@ -143,6 +144,15 @@ async def query_by_id(
 
     async with Client(network) as client:
         await client.execute(ReservationQuery(id))
+
+
+@app.command()
+async def clean(network: ClientNetwork) -> None:
+    """Cleans the remote database."""
+    from big_medicine.core.client.core import Client
+
+    async with Client(network) as client:
+        await client.execute(Clean())
 
 
 @app.command()

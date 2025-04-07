@@ -108,6 +108,12 @@ class Query(GetRequest):
     pass
 
 
+class Clean(GetRequest):
+    @staticmethod
+    def route() -> str:
+        return "/clean"
+
+
 class ReservationQuery(Query):
     def __init__(self, id: str) -> None:
         self.id = id

@@ -418,8 +418,8 @@ def medicine(request: Request, name: str) -> MedicineResponse | ResponseItem:
     return MedicineResponse(medicine=dict(obj), type=ResponseType.INFO)
 
 
-@app.get("/delete")
-async def delete() -> ResponseItem:
+@app.get("/clean")
+async def clean() -> ResponseItem:
     assert app.session
     Logger.info("Cleaning the database")
     await execute_async(app.session, "DROP KEYSPACE medicines;")
