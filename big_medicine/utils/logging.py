@@ -1,7 +1,10 @@
 import logging
 from enum import Enum
 from functools import wraps
-from typing import Callable, ParamSpec, TypeVar
+from typing import TYPE_CHECKING, Callable, ParamSpec, TypeVar
+
+if TYPE_CHECKING:
+    from logging import _Level
 
 
 class Level(str, Enum):
@@ -20,6 +23,8 @@ R = TypeVar("R")
 
 class _Logger(logging.Logger):
     FMT = "%(asctime)s %(filename)s:%(lineno)d %(levelname)s %(message)s"  # noqa: E501
+    UVICORN_LOGGER_NAMES = ("uvicorn", "uvicorn.error", "uvicorn.access")
+    UVICORN_LOGGERS = list(map(logging.getLogger, UVICORN_LOGGER_NAMES))
 
     def __init__(self, level: int | str = logging.DEBUG) -> None:
         """Instantiates custom logger.
@@ -33,11 +38,15 @@ class _Logger(logging.Logger):
         super().__init__(name=__package__)
         coloredlogs.install(logger=self, level=level, fmt=self.FMT)
 
-        uvicorn_loggers = ["uvicorn", "uvicorn.error", "uvicorn.access"]
-        for logger_name in uvicorn_loggers:
-            logger = logging.getLogger(logger_name)
+        for logger in self.UVICORN_LOGGERS:
             logger.handlers = self.handlers
             logger.propagate = False
+
+    def setLevel(self, level: "_Level") -> None:
+        for logger in self.UVICORN_LOGGERS:
+            logger.setLevel(level)
+            logger.handlers = self.handlers
+        super().setLevel(level)
 
     @staticmethod
     def func(
