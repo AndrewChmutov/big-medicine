@@ -2,7 +2,7 @@ import asyncio
 import logging
 import random
 import traceback
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from multiprocessing import Pipe, Process
 from typing import ClassVar
 
@@ -14,6 +14,7 @@ from big_medicine.core.client.model import Account, ClientNetwork
 from big_medicine.core.client.request import (
     AccountQuery,
     AllQuery,
+    DirectRequest,
     MedicineQuery,
     Request,
 )
@@ -92,15 +93,19 @@ def process_random_queries(name: str, n_requests: int) -> None:
     asyncio.run(async_process_random_queries(name, n_requests))
 
 
-@pytest.mark.parametrize("n_requests", [100, 150])
-@pytest.mark.parametrize("n_clients", [2, 3])
-def test_multiple_clients(n_clients: int, n_requests: int) -> None:
+def process_name(i: int) -> str:
+    return f"client-{i}"
+
+
+def run_processes(
+    n_clients: int, target: Callable, additional_args: tuple = tuple()
+) -> None:
     print()
     processes = [
         ProcessWithException(
-            target=process_random_queries,
-            name=(name := f"client-{i}"),
-            args=(name, n_requests),
+            target=target,
+            name=(name := process_name(i)),
+            args=(name,) + additional_args,
         )
         for i in range(n_clients)
     ]
@@ -112,3 +117,25 @@ def test_multiple_clients(n_clients: int, n_requests: int) -> None:
         process.join()
         if tb := process.exception:
             pytest.fail(tb)
+
+
+@pytest.mark.parametrize("n_requests", [100, 150])
+@pytest.mark.parametrize("n_clients", [2, 3])
+def test_multiple_clients(n_clients: int, n_requests: int) -> None:
+    run_processes(n_clients, process_random_queries, (n_requests,))
+
+
+async def async_process_occupy(name: str) -> None:
+    async with Client(ClientNetwork(), Account(name=name)) as client:
+        query = "SELECT name FROM medicine"
+        name_dicts = await client.execute(DirectRequest(query))
+        print(name_dicts)
+
+
+def process_occupy(name: str) -> None:
+    asyncio.run(async_process_occupy(name))
+
+
+@pytest.mark.parametrize("n_clients", [1])
+def test_occupancy(n_clients: int) -> None:
+    run_processes(n_clients, process_occupy)

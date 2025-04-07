@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from types import TracebackType
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from big_medicine.core.client.model import Account, ClientNetwork
 from big_medicine.core.client.request import Request
@@ -39,9 +39,9 @@ class Client:
         assert self._session
         await self._session.__aexit__(exc_type, exc_val, exc_tb)
 
-    async def execute(self, request: Request) -> None:
+    async def execute(self, request: Request) -> dict[str, Any]:
         assert self._session
-        await request.execute(self._session, self.base_url)
+        return await request.execute(self._session, self.base_url)
 
     @property
     def base_url(self) -> str:

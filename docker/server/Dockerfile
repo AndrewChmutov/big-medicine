@@ -5,6 +5,8 @@ COPY --from=ghcr.io/astral-sh/uv@sha256:cb641b1979723dc5ab87d61f079000009edc107d
 ADD . /app
 WORKDIR /app
 RUN --mount=type=cache,target=/root/.cache \
-    uv sync --frozen
+    uv sync --frozen --extra server
+
+EXPOSE 8080
 
 CMD ["uv", "run", "bigmed", "serve"]

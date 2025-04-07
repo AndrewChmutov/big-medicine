@@ -4,6 +4,8 @@ import os
 from itertools import count
 from typing import TYPE_CHECKING, Any
 
+from cassandra import ConsistencyLevel
+
 from big_medicine.utils.logging import Logger
 
 if TYPE_CHECKING:
@@ -90,6 +92,7 @@ def upload(
                 data[agg] = values
 
             query = prepared_query.bind([data[key] for key in columns])
+            query.consistency_level = ConsistencyLevel.ALL
             future = session.execute_async(query)
             future.add_callbacks(insert_next, insert_next)
 

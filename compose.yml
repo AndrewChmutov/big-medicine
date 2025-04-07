@@ -48,6 +48,16 @@ services:
     networks:
       - cassandra-net
 
+  server:
+    image: big-medicine-server
+    depends_on:
+      init:
+        condition: service_completed_successfully
+    networks:
+      - cassandra-net
+    ports:
+      - 8080:8080
+
 networks:
   cassandra-net:
     driver: bridge

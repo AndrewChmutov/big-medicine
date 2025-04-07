@@ -17,9 +17,11 @@ from big_medicine.core.server.message import (
     UpdateReservation,
 )
 
+R = dict[str, Any]
+
 
 class Request(ABC):
-    async def execute(self, session: ClientSession, base_url: str) -> None: ...
+    async def execute(self, session: ClientSession, base_url: str) -> R: ...
 
     @staticmethod
     @abstractmethod
@@ -31,33 +33,35 @@ class Request(ABC):
 
 
 class GetRequest(Request):
-    async def execute(self, session: ClientSession, base_url: str) -> None:
+    async def execute(self, session: ClientSession, base_url: str) -> R:
         async with session.get(
             self.url(base_url), params=self.params()
         ) as response:
-            await self.handle_response(response)
+            return await self.handle_response(response)
 
     def params(self) -> dict[str, Any]:
         return {}
 
-    async def handle_response(self, response: ClientResponse) -> None:
+    async def handle_response(self, response: ClientResponse) -> R:
         content = await response.json()
         Logger.info(f"{content}")
+        return content
 
 
 class PostRequest(Request):
-    async def execute(self, session: ClientSession, base_url: str) -> None:
+    async def execute(self, session: ClientSession, base_url: str) -> R:
         async with session.post(
             self.url(base_url), json=self.json()
         ) as response:
-            await self.handle_response(response)
+            return await self.handle_response(response)
 
     @abstractmethod
     def json(self) -> dict[str, Any]: ...
 
-    async def handle_response(self, response: ClientResponse) -> None:
+    async def handle_response(self, response: ClientResponse) -> R:
         content = await response.json()
         Logger.info(f"{content}")
+        return content
 
 
 class Reserve(PostRequest):
