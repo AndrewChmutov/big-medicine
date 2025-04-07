@@ -15,8 +15,8 @@ class Medicine(Model):
 
 
 class Reservation(Model):
-    id = columns.UUID(primary_key=True)
     reservation_id = columns.UUID(primary_key=True)
+    id = columns.UUID(primary_key=True)
     account_name = columns.Text(primary_key=True)
     medicine = columns.Text()
     count = columns.Integer()

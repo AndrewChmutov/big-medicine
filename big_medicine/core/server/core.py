@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import itertools
+import operator
 import os
 import traceback
 import uuid
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from dataclasses import dataclass
 from pathlib import Path
 
 from cassandra.cluster import Session
@@ -13,13 +16,15 @@ from cassandra.cqlengine.connection import (
     register_connection,
     set_default_connection,
 )
-from cassandra.query import BatchStatement, BatchType, PreparedStatement
+from cassandra.query import BoundStatement, PreparedStatement
 from fastapi import FastAPI, Request
 
 from big_medicine.core.client.model import Cassandra
 from big_medicine.core.server.message import (
+    MedicineEntry,
     MedicineReservations,
     MedicineResponse,
+    ReservationEntryItem,
     ReservationResponse,
     ReservationsResponse,
     ResponseItem,
@@ -73,43 +78,72 @@ async def lifespan(self: Server) -> AsyncGenerator[None, None]:
 
         Logger.info("Preparing statements")
         columns = Reservation._columns  # pyright: ignore[reportAttributeAccessIssue]
-        self.st_reserve = session.prepare(
-            "INSERT INTO {} ({}) VALUES ({});".format(
-                Reservation.__name__.lower(),
-                ", ".join(columns),
-                ", ".join("?" for _ in columns),
-            )
+        _ = session.prepare
+        statements = Statements(
+            medicine_conditional_update=_(
+                f"UPDATE {Medicine.__name__.lower()} "
+                "SET count = ? WHERE name = ? if count = ?"
+            ),
+            medicine_select=_(
+                f"SELECT * FROM {Medicine.__name__.lower()} WHERE name = ?"
+            ),
+            medicine_select_count=_(
+                f"SELECT count FROM {Medicine.__name__.lower()} WHERE name = ?"
+            ),
+            reservation_select=_(
+                "SELECT account_name, medicine as name, count FROM "
+                f"{Reservation.__name__.lower()} WHERE reservation_id = ?"
+            ),
+            reservation_select_account=_(
+                "SELECT reservation_id, account_name, medicine as name, count "
+                f"FROM {Reservation.__name__.lower()} WHERE "
+                f"account_name = ? ALLOW FILTERING"
+            ),
+            reservation_select_all=_(
+                "SELECT reservation_id, account_name, medicine as name, count "
+                f"FROM {Reservation.__name__.lower()}"
+            ),
+            reservation_insert=_(
+                "INSERT INTO {} ({}) VALUES ({});".format(
+                    Reservation.__name__.lower(),
+                    ", ".join(columns),
+                    ", ".join("?" for _ in columns),
+                )
+            ),
         )
-        self.st_decrease_medicine = session.prepare(
-            f"UPDATE {Medicine.__name__.lower()} "
-            "SET count = ? WHERE name = ? if count = ?"
-        )
-
-        self.st_get_medicine = session.prepare(
-            f"SELECT * FROM {Medicine.__name__.lower()} WHERE name = ?"
-        )
-
-        self.st_get_current_count = session.prepare(
-            f"SELECT count FROM {Medicine.__name__.lower()} WHERE name = ?"
-        )
-
+        self.statements = statements
         yield
+
+
+@dataclass
+class Statements:
+    medicine_conditional_update: PreparedStatement
+    medicine_select: PreparedStatement
+    medicine_select_count: PreparedStatement
+    reservation_select: PreparedStatement
+    reservation_select_account: PreparedStatement
+    reservation_select_all: PreparedStatement
+    reservation_insert: PreparedStatement
 
 
 class Server(FastAPI):
     def __init__(self, *args, **kwargs) -> None:
         _ = kwargs.setdefault("lifespan", lifespan)
         self.session: Session | None = None
-        self.st_reserve: PreparedStatement | None = None
-        self.st_decrease_medicine: PreparedStatement | None = None
-        self.st_get_medicine: PreparedStatement | None = None
-        self.query_account_statement: PreparedStatement | None = None
-        self.st_get_current_count: PreparedStatement | None = None
+        self.statements: Statements | None = None
 
         super().__init__(*args, **kwargs)
 
 
 app = Server()
+
+
+def session_and_statements() -> tuple[Session, Statements]:
+    session = app.session
+    statements = app.statements
+    assert session
+    assert statements
+    return session, statements
 
 
 @app.post("/reserve")
@@ -118,22 +152,22 @@ def reserve(request: Request, item: MedicineReservations) -> ResponseItem:
     # * verify whether count is ok
     # * decrease the count under the condition the count hasn't changed
     # * create new reservation
-    session = app.session
-    assert session
+    session, statements = session_and_statements()
 
     current_counts = []
     for medicine in item.entries:
         current_counts.append(
             session.execute(
-                app.st_get_current_count.bind((medicine.name,))
+                statements.medicine_select_count.bind((medicine.name,))
             ).one()
         )
 
     # Subtract counts
     # Note: Batch with conditions cannot span multiple tables
     # therefore it is done in two stages
-    batch = BatchStatement()
-    for medicine, current_count in zip(item.entries, current_counts):
+    medicine_and_counts = list(zip(item.entries, current_counts))
+    for i, (medicine, current_count) in enumerate(medicine_and_counts):
+        # Verify count
         current_count = (current_count or {}).get("count")
         if current_count is None:
             msg = f"Medicine {medicine.name} does not exist"
@@ -142,6 +176,8 @@ def reserve(request: Request, item: MedicineReservations) -> ResponseItem:
                 msg=msg,
                 type=ResponseType.ERROR,
             )
+
+        # Compare count
         if medicine.count > current_count:
             msg = (
                 f"Cannot reserve '{medicine.name}': requested "
@@ -151,35 +187,36 @@ def reserve(request: Request, item: MedicineReservations) -> ResponseItem:
             Logger.debug(msg)
             return ResponseItem(msg=msg, type=ResponseType.ERROR)
 
-        batch.add(
-            app.st_decrease_medicine.bind((
-                current_count - medicine.count,
-                medicine.name,
-                current_count,
-            ))
-        )
+        # Execute
+        try:
+            session.execute(
+                statements.medicine_conditional_update.bind((
+                    current_count - medicine.count,
+                    medicine.name,
+                    current_count,
+                ))
+            )
+        except Exception as ex:
+            # Handle conflict: restore up to i-th medicine
+            log_exception(ex)
+            msg = "An exception occurred"
+            return ResponseItem(type=ResponseType.EXCEPTION, msg=msg)
 
-    if not session.execute(batch)[0]["[applied]"]:
-        msg = "Couldn't find the meds for the given reservation"
-        Logger.debug(msg)
-        return ResponseItem(msg=msg, type=ResponseType.ERROR)
-
-    batch = BatchStatement(batch_type=BatchType.UNLOGGED)
     reservation_id = uuid.uuid4()
     for medicine, current_count in zip(item.entries, current_counts):
-        id = uuid.uuid4()
-        batch.add(
-            app.st_reserve.bind((
-                id,
+        session.execute(
+            statements.reservation_insert.bind((
                 reservation_id,
+                uuid.uuid4(),
                 item.account_name,
                 medicine.name,
                 medicine.count,
             ))
         )
-    session.execute(batch)
 
-    return ResponseItem(msg="Reserved successfully.", type=ResponseType.INFO)
+    msg = f"Reserved successfully: {reservation_id}."
+    Logger.debug(msg)
+    return ResponseItem(msg=msg, type=ResponseType.INFO)
 
 
 @app.post("/update")
@@ -196,45 +233,83 @@ def update(request: Request, item: UpdateReservation) -> ResponseItem:
 
 
 @app.get("/query")
-def query(request: Request, id: int) -> ReservationResponse:
-    # Filter by reservation id and group by reservation id
+def query(request: Request, id: str) -> ReservationResponse | ResponseItem:
+    session, statements = session_and_statements()
+
+    try:
+        id_uuid = uuid.UUID(str(id))
+    except ValueError:
+        return ResponseItem(type=ResponseType.ERROR, msg="Invalid UUID")
+
+    statement = statements.reservation_select.bind((id_uuid,))
+    all = session.execute(statement).all()
+    if not all:
+        return ResponseItem(type=ResponseType.ERROR, msg="No such reservation")
+
+    reservation_id = id
+    account_name = all[0]["account_name"]
     return ReservationResponse(
         type=ResponseType.INFO,
-        reservation=None,
+        reservation_id=reservation_id,
+        account_name=account_name,
+        entries=[
+            MedicineEntry(name=entry["name"], count=entry["count"])
+            for entry in all
+        ],
+    )
+
+
+def retrieve_reservations(
+    session: Session, statement: PreparedStatement | BoundStatement
+) -> ReservationsResponse | ResponseItem:
+    all = session.execute(statement).all()
+    if not all:
+        msg = "No reservations found"
+        return ResponseItem(type=ResponseType.ERROR, msg=msg)
+
+    reservations = []
+    getter = operator.itemgetter("reservation_id")
+    for reservation_id, entries in itertools.groupby(all, getter):
+        entries = list(entries)
+        account_name = entries[0]["account_name"]
+        reservation = ReservationEntryItem(
+            reservation_id=str(reservation_id),
+            account_name=account_name,
+            entries=[
+                MedicineEntry(name=entry["name"], count=entry["count"])
+                for entry in entries
+            ],
+        )
+        reservations.append(reservation)
+
+    return ReservationsResponse(
+        type=ResponseType.INFO,
+        reservations=reservations,
     )
 
 
 @app.get("/query-account")
-def query_account(request: Request, name: str) -> ReservationsResponse:
-    # Filter by account and group by reservation id
-    # Collect
-    return ReservationsResponse(
-        type=ResponseType.INFO,
-        reservations=[],
-    )
+def query_account(
+    request: Request, name: str
+) -> ReservationsResponse | ResponseItem:
+    session, statements = session_and_statements()
+    statement = statements.reservation_select_account.bind((name,))
+    return retrieve_reservations(session, statement)
 
 
 @app.get("/query-all")
-def query_all() -> ReservationsResponse:
-    # Group by reservation id
-    # Collect
-    return ReservationsResponse(
-        type=ResponseType.INFO,
-        reservations=[],
-    )
+def query_all() -> ReservationsResponse | ResponseItem:
+    session, statements = session_and_statements()
+    statement = statements.reservation_select_all
+    return retrieve_reservations(session, statement)
 
 
 @app.get("/medicine")
-def medicine(request: Request, name: str) -> MedicineResponse:
-    assert app.session
-    assert app.medicine_statement
-    try:
-        query = app.medicine_statement.bind(name)
-        obj = app.session.execute(query).one()
-        return MedicineResponse(medicine=dict(obj), type=ResponseType.INFO)
-    except Exception as ex:
-        log_exception(ex)
-        return MedicineResponse(medicine=None, type=ResponseType.INFO)
+def medicine(request: Request, name: str) -> MedicineResponse | ResponseItem:
+    session, statements = session_and_statements()
+    query = statements.medicine_select.bind((name,))
+    obj = session.execute(query).one()
+    return MedicineResponse(medicine=dict(obj), type=ResponseType.INFO)
 
 
 @app.get("/delete")
@@ -242,6 +317,7 @@ def delete() -> ResponseItem:
     assert app.session
     Logger.info("Cleaning the database")
     app.session.execute("DROP KEYSPACE medicines;")
+    app.session.execute("DROP KEYSPACE reservations;")
     return ResponseItem(msg="Cleaned the database", type=ResponseType.INFO)
 
 

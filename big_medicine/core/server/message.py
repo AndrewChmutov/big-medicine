@@ -21,6 +21,7 @@ class UpdateReservation(BaseModel):
 class ResponseType(str, Enum):
     INFO = "info"
     ERROR = "error"
+    EXCEPTION = "exception"
 
 
 class ResponseItem(BaseModel):
@@ -29,13 +30,12 @@ class ResponseItem(BaseModel):
 
 
 class ReservationEntryItem(BaseModel):
-    reservation_id: int
-    medicine: str
-    count: str
+    reservation_id: str
+    account_name: str
+    entries: list[MedicineEntry]
 
 
-class ReservationResponse(ResponseItem):
-    reservation: ReservationEntryItem | None
+class ReservationResponse(ResponseItem, ReservationEntryItem): ...
 
 
 class ReservationsResponse(ResponseItem):
@@ -43,4 +43,4 @@ class ReservationsResponse(ResponseItem):
 
 
 class MedicineResponse(ResponseItem):
-    medicine: dict | None
+    medicine: dict
