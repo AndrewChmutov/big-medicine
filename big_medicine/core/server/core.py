@@ -25,6 +25,7 @@ from fastapi import FastAPI, Request
 
 from big_medicine.core.client.model import Cassandra
 from big_medicine.core.server.message import (
+    DictResponse,
     MedicineEntry,
     MedicineReservations,
     MedicineResponse,
@@ -453,6 +454,17 @@ async def clean() -> ResponseItem:
     await execute_async(app.session, "DROP KEYSPACE medicines;")
     init_empty(app.session)
     return ResponseItem(msg="Cleaned the database", type=ResponseType.INFO)
+
+
+@app.get("/direct")
+async def direct(request: Request, query: str) -> DictResponse:
+    assert app.session
+    result = app.session.execute(query)
+    return DictResponse(
+        msg="Performed request successfully.",
+        type=ResponseType.INFO,
+        content=list(result),
+    )
 
 
 def log_exception(ex: Exception) -> None:

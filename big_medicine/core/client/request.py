@@ -154,3 +154,15 @@ class MedicineQuery(Query):
     @staticmethod
     def route() -> str:
         return "/medicine"
+
+
+class DirectRequest(GetRequest):
+    def __init__(self, query: str) -> None:
+        self.query = query
+
+    def params(self) -> dict[str, Any]:
+        return {"query": self.query}
+
+    @staticmethod
+    def route() -> str:
+        return "/direct"

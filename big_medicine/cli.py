@@ -20,6 +20,7 @@ from big_medicine.core.client.request import (
     AccountQuery,
     AllQuery,
     Clean,
+    DirectRequest,
     MedicineQuery,
     ReservationQuery,
     Reserve,
@@ -162,6 +163,14 @@ async def medicine(name: str, network: ClientNetwork) -> None:
 
     async with Client(network) as client:
         await client.execute(MedicineQuery(name=name))
+
+
+@app.command()
+async def direct(query: str, network: ClientNetwork) -> None:
+    from big_medicine.core.client.core import Client
+
+    async with Client(network) as client:
+        await client.execute(DirectRequest(query=query))
 
 
 @app.command()

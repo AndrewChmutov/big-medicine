@@ -44,3 +44,7 @@ class ReservationsResponse(ResponseItem):
 
 class MedicineResponse(ResponseItem):
     medicine: dict
+
+
+class DictResponse(ResponseItem):
+    content: dict | list
