@@ -17,28 +17,23 @@ class MedicineReservation:
 class Account(BaseModel):
     name: Annotated[
         str,
-        Field(config["account"]["name"], description="Name of the account"),
-    ]
+        Field(description="Name of the account"),
+    ] = config["account"]["name"]
 
 
 class Cassandra(BaseModel):
     points: Annotated[
         list[str],
-        Field(config["cassandra"]["points"], description="Names of clusters"),
-    ]
+        Field(description="Names of clusters"),
+    ] = config["cassandra"]["points"]
     keyspace: Annotated[
         str,
-        Field(
-            config["cassandra"]["keyspace"], description="Cassandra keyspace"
-        ),
-    ]
+        Field(description="Cassandra keyspace"),
+    ] = config["cassandra"]["keyspace"]
     repl_factor: Annotated[
         int,
-        Field(
-            config["cassandra"]["repl_factor"],
-            description="Cassandra replication factor",
-        ),
-    ]
+        Field(description="Cassandra replication factor"),
+    ] = config["cassandra"]["repl_factor"]
 
 
 class NetworkBase(BaseModel):
@@ -49,30 +44,20 @@ class NetworkBase(BaseModel):
 class ClientNetwork(NetworkBase):
     ip: Annotated[
         str,
-        Field(
-            config["network"]["client"]["ip"], description="IP of the network"
-        ),
-    ]
+        Field(description="IP of the network"),
+    ] = config["network"]["client"]["ip"]
     port: Annotated[
         int,
-        Field(
-            config["network"]["client"]["port"],
-            description="Port of the network",
-        ),
-    ]
+        Field(description="Port of the network"),
+    ] = config["network"]["client"]["port"]
 
 
 class ServerNetwork(NetworkBase):
     ip: Annotated[
         str,
-        Field(
-            config["network"]["server"]["ip"], description="IP of the network"
-        ),
-    ]
+        Field(description="IP of the network"),
+    ] = config["network"]["server"]["ip"]
     port: Annotated[
         int,
-        Field(
-            config["network"]["server"]["port"],
-            description="Port of the network",
-        ),
-    ]
+        Field(description="Port of the network"),
+    ] = config["network"]["server"]["port"]

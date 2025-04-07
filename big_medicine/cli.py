@@ -175,14 +175,18 @@ def prepare_dataset(
 
 @app.command()
 def serve(
-    cassandra: Cassandra,
-    network: ServerNetwork,
+    production: bool = False,
+    cassandra: Cassandra = Cassandra(),
+    network: ServerNetwork = ServerNetwork(),
 ) -> None:
     """Creates a FastAPI server for request handling."""
     import toml
     import uvicorn
 
     from big_medicine.core.server.core import CONFIG_PATH_ENV
+
+    if production:
+        Logger.setLevel(logging.ERROR)
 
     with tempfile.NamedTemporaryFile() as tfile:
         with open(tfile.name, "w") as file:
@@ -195,9 +199,10 @@ def serve(
             "big_medicine.core.server.core:app",
             host=network.ip,
             port=network.port,
-            log_level=logging.INFO,
+            log_level=Logger.level,
             log_config=None,
-            reload=True,
+            reload=not production,
+            workers=4 if production else None,
         )
 
 
