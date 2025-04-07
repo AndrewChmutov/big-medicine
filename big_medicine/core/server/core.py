@@ -1,14 +1,16 @@
 from __future__ import annotations
 
+import asyncio
 import itertools
 import operator
 import os
 import traceback
 import uuid
-from collections.abc import AsyncGenerator, Iterable, Iterator
+from collections.abc import AsyncGenerator, Iterable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from cassandra.cluster import Session
 from cassandra.cqlengine.connection import (
@@ -38,6 +40,25 @@ from big_medicine.core.server.model import (
 from big_medicine.utils.logging import Logger
 
 CONFIG_PATH_ENV = "BIGMED_SERVER_CONFIG"
+
+
+async def execute_async(
+    session: Session,
+    statement: str | PreparedStatement | BoundStatement,
+) -> Any:
+    loop = asyncio.get_running_loop()
+    future = loop.create_future()
+
+    def success_callback(result: Any) -> None:
+        loop.call_soon_threadsafe(future.set_result, result)
+
+    def error_callback(exc: Exception) -> None:
+        Logger.error(f"Query failed: {exc}")
+        loop.call_soon_threadsafe(future.set_exception, exc)
+
+    cassandra_future = session.execute_async(statement)
+    cassandra_future.add_callbacks(success_callback, error_callback)
+    return await future
 
 
 @asynccontextmanager
@@ -151,15 +172,16 @@ def session_and_statements() -> tuple[Session, Statements]:
     return session, statements
 
 
-def get_current_counts(
+async def get_current_counts(
     session: Session, statements: Statements, entries: Iterable[MedicineEntry]
-) -> Iterator[int | None]:
+) -> list[int | None]:
+    futures = []
     for medicine in entries:
-        current_count = session.execute(
-            statements.medicine_select_count.bind((medicine.name,))
-        ).one()
+        statement = statements.medicine_select_count.bind((medicine.name,))
+        futures.append(execute_async(session, statement))
 
-        yield (current_count or {}).get("count")
+    res = await asyncio.gather(*futures)
+    return [(current_count or [{}])[0].get("count") for current_count in (res)]
 
 
 def medicine_does_not_exist_response(medicine: MedicineEntry) -> ResponseItem:
@@ -172,12 +194,13 @@ def medicine_does_not_exist_response(medicine: MedicineEntry) -> ResponseItem:
 
 
 @app.post("/reserve")
-def reserve(request: Request, item: MedicineReservations) -> ResponseItem:
+async def reserve(
+    request: Request, item: MedicineReservations
+) -> ResponseItem:
     session, statements = session_and_statements()
 
-    current_counts = list(
-        get_current_counts(session, statements, item.entries)
-    )
+    _ = get_current_counts
+    current_counts = await _(session, statements, item.entries)
     medicine_and_counts = list(zip(item.entries, current_counts))
     for i, (medicine, current_count) in enumerate(medicine_and_counts):
         if current_count is None:
@@ -225,7 +248,7 @@ def reserve(request: Request, item: MedicineReservations) -> ResponseItem:
     return ResponseItem(msg=msg, type=ResponseType.INFO)
 
 
-def retrieve_single_reservation(
+async def retrieve_single_reservation(
     session: Session, statements: Statements, id: str
 ) -> ReservationEntryItem | ResponseItem:
     try:
@@ -234,7 +257,7 @@ def retrieve_single_reservation(
         return ResponseItem(type=ResponseType.ERROR, msg="Invalid UUID")
 
     statement = statements.reservation_select.bind((id_uuid,))
-    all = session.execute(statement).all()
+    all = await execute_async(session, statement)
     if not all:
         return ResponseItem(type=ResponseType.ERROR, msg="No such reservation")
 
@@ -250,18 +273,17 @@ def retrieve_single_reservation(
 
 
 @app.post("/update")
-def update(request: Request, item: UpdateReservation) -> ResponseItem:
+async def update(request: Request, item: UpdateReservation) -> ResponseItem:
     session, statements = session_and_statements()
 
-    match retrieve_single_reservation(session, statements, item.id):
+    match await retrieve_single_reservation(session, statements, item.id):
         case ReservationEntryItem() as reservation:
             pass
         case ResponseItem() as response:
             return response
 
-    current_counts = list(
-        get_current_counts(session, statements, item.entries)
-    )
+    _ = get_current_counts
+    current_counts = await _(session, statements, item.entries)
     current_reserved = {e.name: e.count for e in reservation.entries}
     medicine_and_counts = list(zip(item.entries, current_counts))
     for i, (medicine, current_count) in enumerate(medicine_and_counts):
@@ -318,9 +340,11 @@ def update(request: Request, item: UpdateReservation) -> ResponseItem:
 
 
 @app.get("/query")
-def query(request: Request, id: str) -> ReservationResponse | ResponseItem:
+async def query(
+    request: Request, id: str
+) -> ReservationResponse | ResponseItem:
     session, statements = session_and_statements()
-    match retrieve_single_reservation(session, statements, id):
+    match await retrieve_single_reservation(session, statements, id):
         case ReservationEntryItem() as item:
             return ReservationResponse(
                 type=ResponseType.INFO,
@@ -332,30 +356,34 @@ def query(request: Request, id: str) -> ReservationResponse | ResponseItem:
             return response
 
 
-def retrieve_reservations(
+async def retrieve_reservations(
     session: Session, statement: PreparedStatement | BoundStatement
-) -> Iterator[ReservationEntryItem]:
-    all = session.execute(statement).all()
+) -> list[ReservationEntryItem]:
+    all = await execute_async(session, statement)
 
     getter = operator.itemgetter("reservation_id")
+    reservations = []
     for reservation_id, entries in itertools.groupby(all, getter):
         entries = list(entries)
         account_name = entries[0]["account_name"]
-
-        yield ReservationEntryItem(
-            id=str(reservation_id),
-            account_name=account_name,
-            entries=[
-                MedicineEntry(name=entry["name"], count=entry["count"])
-                for entry in entries
-            ],
+        reservations.append(
+            ReservationEntryItem(
+                id=str(reservation_id),
+                account_name=account_name,
+                entries=[
+                    MedicineEntry(name=entry["name"], count=entry["count"])
+                    for entry in entries
+                ],
+            )
         )
 
+    return reservations
 
-def retrieve_reservations_response(
+
+async def retrieve_reservations_response(
     session: Session, statement: PreparedStatement | BoundStatement
 ) -> ReservationsResponse | ResponseItem:
-    reservations = list(retrieve_reservations(session, statement))
+    reservations = await retrieve_reservations(session, statement)
     if not reservations:
         msg = "No reservations found"
         return ResponseItem(type=ResponseType.ERROR, msg=msg)
@@ -367,19 +395,19 @@ def retrieve_reservations_response(
 
 
 @app.get("/query-account")
-def query_account(
+async def query_account(
     request: Request, name: str
 ) -> ReservationsResponse | ResponseItem:
     session, statements = session_and_statements()
     statement = statements.reservation_select_account.bind((name,))
-    return retrieve_reservations_response(session, statement)
+    return await retrieve_reservations_response(session, statement)
 
 
 @app.get("/query-all")
-def query_all() -> ReservationsResponse | ResponseItem:
+async def query_all() -> ReservationsResponse | ResponseItem:
     session, statements = session_and_statements()
     statement = statements.reservation_select_all
-    return retrieve_reservations_response(session, statement)
+    return await retrieve_reservations_response(session, statement)
 
 
 @app.get("/medicine")
@@ -391,10 +419,10 @@ def medicine(request: Request, name: str) -> MedicineResponse | ResponseItem:
 
 
 @app.get("/delete")
-def delete() -> ResponseItem:
+async def delete() -> ResponseItem:
     assert app.session
     Logger.info("Cleaning the database")
-    app.session.execute("DROP KEYSPACE medicines;")
+    await execute_async(app.session, "DROP KEYSPACE medicines;")
     return ResponseItem(msg="Cleaned the database", type=ResponseType.INFO)
 
 
