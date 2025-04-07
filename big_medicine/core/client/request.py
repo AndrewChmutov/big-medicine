@@ -112,6 +112,9 @@ class ReservationQuery(Query):
     def __init__(self, id: str) -> None:
         self.id = id
 
+    def params(self) -> dict[str, Any]:
+        return {"id": self.id}
+
     @staticmethod
     def route() -> str:
         return "/query"
