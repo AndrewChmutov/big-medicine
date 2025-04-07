@@ -148,6 +148,9 @@ class MedicineQuery(Query):
     def __init__(self, name: str) -> None:
         self.name = name
 
+    def params(self) -> dict[str, Any]:
+        return {"name": self.name}
+
     @staticmethod
     def route() -> str:
         return "/medicine"
