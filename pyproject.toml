@@ -2,7 +2,7 @@
 name = "big-medicine"
 version = "0.0.1"
 dependencies = [
-    "aiohttp[speedups]>=3.11.14",
+    "aiohttp[speedups]>=3.11.16",
     "coloredlogs>=15.0.1",
     "pydantic-typer>=0.0.13",
     "toml>=0.10.2",
