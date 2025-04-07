@@ -12,6 +12,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import toml
+from cassandra import InvalidRequest
 from cassandra.cluster import Session
 from cassandra.cqlengine.connection import (
     Cluster,
@@ -61,10 +63,30 @@ async def execute_async(
     return await future
 
 
+def init_empty(session: Session) -> None:
+    maybe_path = os.environ.get(CONFIG_PATH_ENV)
+    assert maybe_path
+    path = Path(maybe_path)
+    with path.open() as file:
+        config = Cassandra.model_validate(toml.load(file))
+    os.environ["CQLENG_ALLOW_SCHEMA_MANAGEMENT"] = "1"
+    from cassandra.cqlengine.management import (
+        create_keyspace_simple,
+        sync_table,
+    )
+
+    keyspace_name = config.keyspace
+    replication_factor = config.repl_factor
+    _ = Logger.info
+    _(f"Creating keyspace {keyspace_name} with {replication_factor=}")
+    create_keyspace_simple(keyspace_name, replication_factor)
+    sync_table(Medicine, keyspaces=[keyspace_name])
+    sync_table(Reservation, keyspaces=[keyspace_name])
+    session.set_keyspace(keyspace_name)
+
+
 @asynccontextmanager
 async def lifespan(self: Server) -> AsyncGenerator[None, None]:
-    import toml
-
     maybe_path = os.environ.get(CONFIG_PATH_ENV)
     if not maybe_path:
         msg = f"Please, provide {CONFIG_PATH_ENV} environmental variable"
@@ -91,7 +113,7 @@ async def lifespan(self: Server) -> AsyncGenerator[None, None]:
     Logger.info(f"Connecting to {config.points}")
     with (
         Cluster(config.points) as cluster,
-        cluster.connect(config.keyspace) as session,
+        cluster.connect() as session,
     ):
         _ = register_connection(str(session), session=session)
         set_default_connection(str(session))
@@ -99,6 +121,11 @@ async def lifespan(self: Server) -> AsyncGenerator[None, None]:
 
         Logger.info("Preparing statements")
         columns = Reservation._columns  # pyright: ignore[reportAttributeAccessIssue]
+        try:
+            session.execute(f"USE {config.keyspace}")
+        except InvalidRequest:
+            init_empty(session)
+
         _ = session.prepare
         statements = Statements(
             medicine_conditional_update=_(
@@ -137,6 +164,7 @@ async def lifespan(self: Server) -> AsyncGenerator[None, None]:
             ),
         )
         self.statements = statements
+        Logger.info("The app is ready.")
         yield
 
 
@@ -423,6 +451,7 @@ async def clean() -> ResponseItem:
     assert app.session
     Logger.info("Cleaning the database")
     await execute_async(app.session, "DROP KEYSPACE medicines;")
+    init_empty(app.session)
     return ResponseItem(msg="Cleaned the database", type=ResponseType.INFO)
 
 
