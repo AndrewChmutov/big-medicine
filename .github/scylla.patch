@@ -1,0 +1,25 @@
+diff --git a/compose.yml b/compose.yml
+index 7141e5a..77a1ba8 100644
+--- a/compose.yml
++++ b/compose.yml
+@@ -1,6 +1,6 @@
+ x-cassandra-base: &cassandra-base
+   image:
+-    cassandra@sha256:70b40a2025d450f7865c5ec6f1ebea13108166f81fe41462069690cb4d9690f2
++    scylladb/scylla@sha256:f7db829b25021644b9b90dd87a5f43e4fd60b5d6d8c6214077b5bfa775da733c
+   environment: &cassandra-env
+     CASSANDRA_CLUSTER_NAME: cassandra-cluster
+     CASSANDRA_ENDPOINT_SNITCH: GossipingPropertyFileSnitch
+diff --git a/pyproject.toml b/pyproject.toml
+index 284e9bf..6d9bd25 100644
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -13,7 +13,7 @@ requires-python = ">=3.10,<3.13"
+
+ [project.optional-dependencies]
+ cassandra = [
+-    "cassandra-driver>=3.29.2",
++    "scylla-driver>=3.29.3",
+ ]
+ processing = [
+     "big_medicine[cassandra]",
