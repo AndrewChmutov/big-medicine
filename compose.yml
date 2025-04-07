@@ -1,6 +1,6 @@
 x-cassandra-base: &cassandra-base
   image:
-    cassandra@sha256:70b40a2025d450f7865c5ec6f1ebea13108166f81fe41462069690cb4d9690f2
+    scylladb/scylla@sha256:f7db829b25021644b9b90dd87a5f43e4fd60b5d6d8c6214077b5bfa775da733c
   environment: &cassandra-env
     CASSANDRA_CLUSTER_NAME: cassandra-cluster
     CASSANDRA_ENDPOINT_SNITCH: GossipingPropertyFileSnitch
@@ -16,7 +16,7 @@ x-cassandra-other: &cassandra-other
   <<: *cassandra-base
   environment:
     <<: *cassandra-env
-    CASSANDRA_SEEDS: cassandra1
+    CASSANDRA_SEEDS: cassandra1,cassandra2,cassandra3
 
 services:
   cassandra1:
@@ -36,17 +36,17 @@ services:
       cassandra2:
         condition: service_healthy
 
-  init:
-    image: big-medicine-init
-    depends_on:
-      cassandra1:
-        condition: service_healthy
-      cassandra2:
-        condition: service_healthy
-      cassandra3:
-        condition: service_healthy
-    networks:
-      - cassandra-net
+  # init:
+  #   image: big-medicine-init
+  #   depends_on:
+  #     cassandra1:
+  #       condition: service_healthy
+  #     cassandra2:
+  #       condition: service_healthy
+  #     cassandra3:
+  #       condition: service_healthy
+  #   networks:
+  #     - cassandra-net
 
 networks:
   cassandra-net:

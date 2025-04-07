@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any
 
 import toml
-from cassandra import InvalidRequest
+from cassandra import ConsistencyLevel, InvalidRequest
 from cassandra.cluster import Session
 from cassandra.cqlengine.connection import (
     Cluster,
@@ -207,6 +207,7 @@ async def get_current_counts(
     futures = []
     for medicine in entries:
         statement = statements.medicine_select_count.bind((medicine.name,))
+        statement.consistency_level = ConsistencyLevel.ALL
         futures.append(execute_async(session, statement))
 
     res = await asyncio.gather(*futures)
@@ -247,13 +248,13 @@ async def reserve(
 
         # Execute
         try:
-            session.execute(
-                statements.medicine_conditional_update.bind((
-                    current_count - medicine.count,
-                    medicine.name,
-                    current_count,
-                ))
-            )
+            statement = statements.medicine_conditional_update.bind((
+                current_count - medicine.count,
+                medicine.name,
+                current_count,
+            ))
+            statement.consistency_level = ConsistencyLevel.ALL
+            session.execute(statement)
         except Exception as ex:
             # Handle conflict: restore up to i-th medicine
             log_exception(ex)
@@ -262,15 +263,15 @@ async def reserve(
 
     reservation_id = uuid.uuid4()
     for medicine, current_count in zip(item.entries, current_counts):
-        session.execute(
-            statements.reservation_insert.bind((
-                reservation_id,
-                uuid.uuid4(),
-                item.account_name,
-                medicine.name,
-                medicine.count,
-            ))
-        )
+        statement = statements.reservation_insert.bind((
+            reservation_id,
+            uuid.uuid4(),
+            item.account_name,
+            medicine.name,
+            medicine.count,
+        ))
+        statement.consistency_level = ConsistencyLevel.ALL
+        session.execute(statement)
 
     msg = f"Reserved successfully: {reservation_id}"
     Logger.debug(msg)
@@ -459,11 +460,14 @@ async def clean() -> ResponseItem:
 @app.get("/direct")
 async def direct(request: Request, query: str) -> DictResponse:
     assert app.session
-    result = app.session.execute(query)
+    statement = app.session.prepare(query).bind(())
+    statement.consistency_level = ConsistencyLevel.ALL
+    result = app.session.execute(statement)
+    result = list(result)
     return DictResponse(
         msg="Performed request successfully.",
         type=ResponseType.INFO,
-        content=list(result),
+        content=result,
     )
 
 

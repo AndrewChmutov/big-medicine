@@ -11,7 +11,7 @@ points = [
     "172.18.0.4",
 ]
 keyspace = "medicines"
-repl_factor = 1
+repl_factor = 3
 
 [network.client]
 ip = "127.0.0.1"
